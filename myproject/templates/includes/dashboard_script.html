@@ -1,0 +1,1263 @@
+
+<script>
+{% if userInfo.backColor %}
+    $("#profile-header").css({'background':'url({{ MEDIA_URL }}/static/images/bg-tissue.png),-webkit-gradient(radial, 50% 50%, 0, 50% 50%, 287, color-stop(0%, {{ userInfo.backColor }}), color-stop(100%, #000))'});
+{% endif %}
+{% if userInfo.textColor %}
+    $("#profile-header").css({'color':'{{ userInfo.textColor }}'});
+{% endif %}
+{% if userInfo.avatarBackColor %}
+    $("#profile-avatar").css({'background-color':'{{ userInfo.avatarBackColor }}'});
+{% endif %}
+{% if userInfo.avatarTextColor %}
+    $("#profile-avatar").css({'color':'{{ userInfo.avatarTextColor }}'});
+{% endif %}
+    
+	$(function() {
+		
+		$( "#n" ).autocomplete({
+			source: "{% url search_bar %}",
+			minLength: 3,
+			focus: function( event, ui ) {
+			$( "#n" ).val( ui.item.value );
+			return false;
+			},
+		 })
+		.data( "ui-autocomplete" )._renderItem = function( ul, item ) {
+		    return $( "<li>" )
+		      .data( "ui-autocomplete-item", item )
+		      .append( "<a>" + item.label + "</a>" )
+		      .appendTo( ul );
+		};	
+			
+			
+        });
+    
+    
+$(document).ready(function(){
+    
+    resizePopups();
+    
+{% if tweets %}
+    {% for tweet in tweets %}
+    colorHashtags("tweet-deck{{ tweet.id }}");
+    colorAtSigns("tweet-deck{{ tweet.id }}");
+    colorWebLinks("tweet-deck{{ tweet.id }}");
+    {% endfor %}
+{% endif %}
+    
+    
+    var currentLocation = window.location;
+    //console.log(currentLocation.pathname);
+    var myPage = currentLocation.pathname.split("/");
+    var noMoreTweets = 'False';
+    var scrollRunning = 'False';
+    //console.log(myPage[1]);
+    {% if tweets %}
+    {% for tweet in tweets %}
+	{% if forloop.first %}
+    var firstTweetItem = {{ tweet.id }};
+	{% endif %}
+	{% if forloop.last %}
+    var lastTweetItem = {{ tweet.id }};
+	{% endif %}
+    {% endfor %}
+    {% endif %}
+    
+    var listLength = $(".right-panel-content").size();
+    if (listLength>19) {
+	$(window).bind('scroll', function(){
+	    if($(window).scrollTop() + $(window).height() > $(document).height() - 200 && noMoreTweets == 'False' && scrollRunning == 'False') {
+		//console.log("noMoreTweets: "+noMoreTweets);
+		scrollRunning = 'True';
+		//console.log($(this).scrollTop());
+		getNextTweets(myPage[1], lastTweetItem);
+	    }
+	});
+    }
+    
+    var startOver = 0;
+    var time = 1;
+    var refreshLongTweets;
+    
+    var shortInterval = function() {
+	//console.log("this time: "+ time +" through short refresh.");
+	//check and update live tweets...
+	getNewTweets(myPage[1], firstTweetItem);
+	console.log("This is the time: "+time+" for short refresh");
+	time++;
+	if (startOver == 1) {
+	    clearInterval(refreshShortTweets);
+	    startOver = 0;
+	    time = 1;
+	    refreshShortTweets = setInterval(shortInterval, 5000);
+	}
+	if (time > 24) {
+	    clearInterval(refreshShortTweets);
+	    time = 1;
+	    refreshLongTweets = setInterval(longInterval, 30000);
+	}
+    }
+    
+    var longInterval = function() {
+		//console.log("this time: "+ time +" through long refresh.");
+		//Check and give update number of tweets for click to refresh...
+		getNewTweets(myPage[1], firstTweetItem);
+		console.log("This is the time: "+time+" for long refresh");
+		time++;
+		if (startOver == 1) {
+		    clearInterval(refreshLongTweets);
+		    startOver = 0;
+		    time = 1;
+		    refreshShortTweets = setInterval(shortInterval, 5000);
+		}
+		if (time > 10) {
+		    clearInterval(refreshLongTweets);
+		    sureCheck('1', 'Your page has timed out.  Would you like to refresh?', refreshPage_callback, stopSurePopup);
+		}
+    }
+    
+    
+    var refreshShortTweets = setInterval(shortInterval, 5000);
+    
+    
+    
+    
+    
+    function refreshPage_callback(classID) {
+	//code
+	location.reload();
+    }
+    
+    $("#shade").attr('style','display:none;');
+    
+    
+    $( window ).resize(function() {
+        resizePopups();
+      });
+    
+    function colorHashtags(id) {
+	var str = $("#"+id).html();
+	var re = /(\A|\s|^)#(\w+)/g; 
+	var replaceText = str.replace(re, function(a,b,c){
+	    //console.log(b+'#<a class="hashtagTweet" href="/search/?q='+ c +'">'+ c +'</a>');
+	    return b+'<a class="hashtagTweet" href="/search/?q='+ c +'">#'+ c +'</a>'
+	});
+	//console.log(str);
+	//console.log(replaceText);
+	$("#"+id).html(replaceText);
+	
+    }
+    
+    function colorAtSigns(id) {
+	var str = $("#"+id).html();
+	var re = /(\A|\s|^)@(\w+)/g; 
+	var replaceText = str.replace(re, function(a,b,c){
+	    //console.log(b+'<span style="color:#ff0f0f;">@'+ c +'</span>');
+	    return b+'<span style="color:#ff0f0f;">@'+ c +'</span>'
+	});
+	//console.log(str);
+	//console.log(replaceText);
+	$("#"+id).html(replaceText);
+	
+    }
+    
+    function colorWebLinks(id) {
+	var str = $("#"+id).html();
+	var re = /(\A|\s|^)(\S*)(http|https|www\.|\.com|\.net|\.org|\.gov|\.biz|\.edu|\.us|\.ect|\.int|\.ru|\.mil|\.tv)(\S*)/g; 
+	var replaceText = str.replace(re, function(a,b){
+	    var strippedLink = a.trim();
+	    var hiddenLink;
+	    if (strippedLink.substring(0,4)!="http") {
+		hiddenLink = "http://"+strippedLink;
+	    }else{hiddenLink = strippedLink;}
+	    //console.log(b+'<a class="colorLink" href="'+ hiddenLink +'" target="newLink">'+ strippedLink +'</a>');
+	    return b+'<a class="colorLink" href="'+ hiddenLink +'" target="newLink">'+ strippedLink +'</a>'
+	});
+	//console.log(str);
+	//console.log(replaceText);
+	$("#"+id).html(replaceText);
+	
+    }
+    
+    
+    function resizeTop(element) {
+	var halfScreenHeight = ($(window).height())/2;
+	var halfElementHeight = (element.height())/2;
+	var top = halfScreenHeight - halfElementHeight;
+	element.css({
+	    'top': top+"px",
+	});
+    }
+    function resizeLeft(element) {
+	var halfScreenWidth = ($(window).width())/2;
+	var halfElementWidth = (element.width())/2;
+	var left = halfScreenWidth - halfElementWidth;
+	element.css({
+	    'left': left+"px",
+	});
+    }
+    
+    function resizePopups() {
+	resizeTop($("#popup"));
+	resizeLeft($("#popup"));
+	resizeTop($("#createClassPopup"));
+	resizeLeft($("#createClassPopup"));
+	resizeTop($("#joinClassPopup"));
+	resizeLeft($("#joinClassPopup"));
+	resizeTop($("#startNewClassPopup"));
+	resizeLeft($("#startNewClassPopup"));
+	resizeTop($("#areYouSurePopup"));
+	resizeLeft($("#areYouSurePopup"));
+	resizeTop($("#editProfilePopup"));
+	resizeLeft($("#editProfilePopup"));
+	resizeLeft($("#center-logo"));
+	
+	var halfProfileWidth = ($("#profile-header").width())/2;
+	$("#profile-avatar").css({'margin-left':(halfProfileWidth-25)+'px'});
+	
+	var colorPosition = $("#editProfilePopup").position();
+	var colorPickerLeft = colorPosition.left + $("#editProfilePopup").width()-5;
+	$("#backPicker-popup").css({'left':colorPickerLeft,'top':colorPosition.top,});
+	$("#textPicker-popup").css({'left':colorPickerLeft,'top':colorPosition.top,});
+	$("#avatarBack-popup").css({'left':colorPickerLeft,'top':colorPosition.top,});
+	$("#avatarText-popup").css({'left':colorPickerLeft,'top':colorPosition.top,});
+    }
+    
+    
+    
+    
+    
+    /********************* Start and Stop to tweet ********************************************************************8******/
+    function startTweet() {
+	$("#shade").fadeIn(600);
+	$("#popup").fadeIn(600);
+    }
+    function stopTweet() {
+	$("#shade").fadeOut(600);
+	$("#popup").fadeOut(600);
+	$("#tweetText").val("");
+	$("#tweetSubmit").removeClass('tweet-button-active');
+	$("#tweetSubmit").addClass('tweet-button');
+    }
+    
+    
+    /********************* Start and Stop "Create a Group" *****************************************************************/
+    function startCreateGroup() {
+	$("#shade").fadeIn(600);
+	$("#createClassPopup").fadeIn(600);
+    }
+    function stopCreateGroup() {
+	$("#shade").fadeOut(600);
+	$("#createClassPopup").fadeOut(600);
+	$(".button").removeClass('tweet-button-active');
+	$(".button").addClass('tweet-button');
+	$("#text-holder input").val("");
+    }
+    
+    
+    /********************* Start and Stop "Join a Group" *******************************************************************/
+    function startJoinGroup() {
+	$("#shade").fadeIn(600);
+	$("#joinClassPopup").fadeIn(600);
+    }
+    function stopJoinGroup() {
+	$("#shade").fadeOut(600);
+	$("#joinClassPopup").fadeOut(600);
+	$(".button").removeClass('tweet-button-active');
+	$(".button").addClass('tweet-button');
+	$("#text-holder input").val("");
+    }
+    
+    function stopCodeDisplay(){
+	$("#shade").fadeOut(600);
+	$("#showCode").fadeOut(600);
+    }
+    
+    function stopNewClassStartup(){
+	$("#shade").fadeOut(600);
+	$("#startNewClassPopup").fadeOut(600);
+    }
+    
+    
+    function stopSurePopup(){
+	$("#shade").fadeOut(600);
+	$("#areYouSurePopup").fadeOut(600);
+    }
+    
+    function success() {
+	$("#success").show();
+	$("#success").delay(4500).hide(0);
+    }
+    
+    function error() {
+	$("#error").show();
+	$("#error").delay(4500).hide(0);
+    }
+    
+    
+    function showEditProfilePopup() {
+	$("#shade").fadeIn(600);
+	$("#editProfilePopup").fadeIn(600);
+	
+	updateBackPicker();
+	updateTextPicker();
+	updateAvatarBack();
+	updateAvatarText();
+	
+    }
+    function hideEditProfilePopup() {
+	$("#shade").fadeOut(600);
+	$("#avatarText-popup").hide(600);
+	$("#avatarBack-popup").hide(600);
+	$("#textPicker-popup").hide(600);
+	$("#backPicker-popup").hide(600);
+	$("#editProfilePopup").fadeOut(600);
+    }
+    
+    
+    /************************* Pick up click events *************((((((((((((((((((((((((((((((((((((((((((((((((((******/
+    $("#right-tweet-button").click(function(){
+	startTweet();
+    });
+    
+    $("#tweetButton").click(function(){
+	startTweet();
+    });
+    
+    $("#popup").on("click","#x-popup", function(){
+	stopTweet();
+    });
+    
+    $("#shade").click(function(){
+	stopTweet();
+	stopCreateGroup();
+	stopJoinGroup();
+        stopCodeDisplay();
+	stopNewClassStartup();
+	stopSurePopup();
+	hideEditProfilePopup();
+    });
+    
+    $("#createGroup").click(function(){
+	startCreateGroup();
+    });
+    
+    $("#joinGroup").click(function(){
+	startJoinGroup();
+    });
+    
+    $("#x-create").click(function(){
+	stopCreateGroup();
+    });
+    
+    $("#x-join").click(function(){
+	stopJoinGroup();
+    });
+    
+    $("#x-code").click(function(){
+        stopCodeDisplay();
+    });
+    
+    $("#X-editProfile").click(function(){
+        hideEditProfilePopup();
+    });
+    
+    $("#cancel-button").click(function(){
+        hideEditProfilePopup();
+    });
+    
+    $("#save-button").click(function(){
+	hideEditProfilePopup();
+	var mr_ms;
+	if ($("#mr_ms").length>0) {
+	    mr_ms = $("#mr_ms").val();
+	}
+	//transfer settings from popup to original
+	var initial = $("#profile-header-popup").css('background');
+	var re = /from\(rgb\((\d*), (\d*), (\d*)/; 
+	var matchText = initial.match(re);
+	var rgb = {'r':matchText[1],'g':matchText[2],'b':matchText[3]};
+	var profileBack = ColorPicker.rgb2hex(rgb);
+	var profileColor = $("#profile-header-popup").css('color');
+	$("#profile-header").css({'background':'url({{ MEDIA_URL }}/static/images/bg-tissue.png),-webkit-gradient(radial, 50% 50%, 0, 50% 50%, 287, color-stop(0%, '+ profileBack +'), color-stop(100%, #000))'});
+	$("#profile-header").css({'color':profileColor});
+	var avatarBack = $("#avatar-back-color").css('background-color');
+	var avatarColor = $("#avatar-back-color").css('color');
+	$("#profile-avatar").css({'background-color':avatarBack,'color':avatarColor});
+	sendProfileColors(profileBack,profileColor,avatarBack,avatarColor,mr_ms);
+    });
+    
+    $("#back_button").click(function(){
+	stopNewClassStartup();
+    });
+    
+    
+    $("#classes-holder").on("click",".displayClassCode", function(){
+	var data = $(this).data("options");
+	startNewClassCode(data.classCode, data.classID);
+    });
+    
+    $("#X-Code").click(function(){
+	stopNewClassStartup();
+    });
+    
+    $("#classes-holder").on("click",".joinAllowed", function(){
+	var classID = $(this).data("options").classID;
+	submitToggleClassLock(classID);
+    });
+    
+        
+    $("#classes-holder").on("click",".joinNotAllowed", function(){
+	var classID = $(this).data("options").classID;
+	submitToggleClassLock(classID);
+    });
+    
+    
+    $("#classes-holder .startClass").on("click",".icon-X", function(){
+	var classID = $(this).data("options").classID;
+	sureCheck(classID, "Are you sure you want to delete this class?", deleteClass_callback, stopSurePopup);
+    });
+    
+    $("#classes-holder").on("click","#newIconX", function(){
+	var classID = $(this).data("options").classID;
+	sureCheck(classID, "Are you sure you want to delete this class?", deleteClass_callback, stopSurePopup);
+    });
+    
+    
+    $("#classes-holder").on("click",".dropClass", function(){
+	var classID = $(this).data("options").classID;
+	sureCheck(classID, "Are you sure you want to drop this class?", dropClass_callback, stopSurePopup);
+    });
+    
+    
+    $("#areYouSurePopup").on("click","#X-Sure", function(){
+	stopSurePopup();
+    });
+    
+    $("#classes-holder").on("click",".myClass", function(){
+	var classID = $(this).data("options").classID;
+	window.location.assign("/dashboard/"+classID);
+    });
+    
+    $("#allTweetsList").on("click",".report_deleteTweet", function(){
+	var tweetID = $(this).data("options").tweetID;
+	if ($(this).hasClass("tweetDelete-button")) {
+	    sureCheck(tweetID, "Are you sure you want to DELETE this tweet?", deleteTweet_callback, stopSurePopup);
+	}else{
+	    sureCheck(tweetID, "Are you sure you want to ALERT the teacher?", alertTweet_callback, stopSurePopup);
+	    
+	}
+	
+    });
+    
+    
+    $("#edit-profile").click(function(){
+	showEditProfilePopup();
+    });
+    
+    
+    $("#profile-header-popup").on("click","#color-back", function(){
+	resizePopups();
+	$("#avatarText-popup").hide(600);
+	$("#avatarBack-popup").hide(600);
+	$("#textPicker-popup").hide(600);
+	$("#backPicker-popup").toggle(600);
+	
+    });
+    $("#profile-header-popup").on("click","#color-text", function(){
+	resizePopups();
+	$("#avatarText-popup").hide(600);
+	$("#avatarBack-popup").hide(600);
+	$("#backPicker-popup").hide(600);
+	$("#textPicker-popup").toggle(600);
+	
+    });
+    $("#profile-header-popup").on("click","#color-avatar-back", function(){
+	resizePopups();
+	$("#avatarText-popup").hide(600);
+	$("#textPicker-popup").hide(600);
+	$("#backPicker-popup").hide(600);
+	$("#avatarBack-popup").toggle(600);
+	
+    });
+    $("#profile-header-popup").on("click","#color-avatar-text", function(){
+	resizePopups();
+	$("#avatarBack-popup").hide(600);
+	$("#textPicker-popup").hide(600);
+	$("#backPicker-popup").hide(600);
+	$("#avatarText-popup").toggle(600);
+	
+    });
+    
+    
+    
+    
+    /******************************* Redirect to Class ****************************************************************************/
+    $("#classes-holder").on("click",".myClass", function(){
+	var classID = $(this).data("options").classID;
+	window.location.assign("/dashboard/"+classID);
+    });
+    
+    $("#startNewClassPopup").on("click","#startTweetingToClass", function(){
+	if ($(this).hasClass("tweet-button-active")) {
+	    var classID = $(this).data("options").classID;
+	    window.location.assign("/dashboard/"+classID);
+	}
+    });
+    
+    /***************************** Sure Checks and Callbacks ************************************************************************/
+    function sureCheck(classID, sureText, callback, closeCallback) {
+	$("#text-holder-sure").html(sureText);
+	$("#shade").fadeIn(600);
+	$("#areYouSurePopup").fadeIn(600);
+	$("#yes-button").unbind('click').click(function(){
+	    //console.log('yes');
+	    callback(classID);
+	    closeCallback();
+	});
+	$("#no-button").unbind('click').click(function(){
+	    //console.log('no');
+	    closeCallback();
+	});
+    }
+    
+    
+    function deleteClass_callback(classID) {
+	submitDeleteClass(classID);
+    }
+    
+    function dropClass_callback(classID) {
+	submitDropClass(classID);
+    }
+    
+    function deleteTweet_callback(tweetID) {
+	submitDeleteTweet(tweetID, 'delete');
+    }
+    
+    function alertTweet_callback(tweetID) {
+	submitDeleteTweet(tweetID, 'review');
+    }
+    
+    /************************* Activate submit button *********************************************************************/
+    $("#text-holder input").keyup(function(){
+	if ($(this).val().length == 0) {
+	    $(".button").removeClass('tweet-button-active');
+	    $(".button").addClass('tweet-button');
+	}
+	else{
+	    $(".button").addClass("tweet-button-active");
+	    $(".button").removeClass('tweet-button');
+	}
+    });
+    
+    /************************* Enter Tweet **********************************************************************************/
+    $("#tweetText").keyup(function(){
+	if ($(this).val().length == 0) {
+	    $("#tweetSubmit").removeClass('tweet-button-active');
+	    $("#tweetSubmit").addClass('tweet-button');
+	}
+	else{
+	    $("#tweetSubmit").addClass("tweet-button-active");
+	    $("#tweetSubmit").removeClass('tweet-button');
+	}
+	$("#number-counter").text(140 - $(this).val().length);
+    });
+    
+    /************************** Submit Tweet ********************************************************************************/
+    $("#popup").on("click","#tweetSubmit", function(){
+	if ($(this).hasClass("tweet-button-active")) {
+	    submitTweet($("#tweetText").val());
+	    
+	    stopTweet();
+	}
+    });
+    
+    /************************* Submit newClass ******************************************************************************/
+    $("#createClassPopup").on("click","#submitClass", function(){
+	if ($(this).hasClass("tweet-button-active")) {
+	    submitNewClass($("#className").val());
+	    stopCreateGroup();
+	}
+    });
+    $("#createClassPopup").on("keydown","#className", function(event){
+	var keycode = (event.keyCode ? event.keyCode : (event.which ? event.which : event.charCode));
+	if (keycode === 13) {
+	    event.preventDefault();
+	    if ($("#submitClass").hasClass("tweet-button-active")) {
+		submitNewClass($("#className").val());
+		stopCreateGroup();
+	    }
+	}
+    });
+    
+    
+    
+    /************************ Submit joinClass *******************************************************************************/
+    $("#joinClassPopup").on("click","#submitJoin", function(){
+	if ($(this).hasClass("tweet-button-active")) {
+	    submitJoinClass($("#joinCode").val());
+	    stopJoinGroup();
+	}
+    });
+    
+    $("#joinClassPopup").on("keydown","#joinCode", function(event){
+	var keycode = (event.keyCode ? event.keyCode : (event.which ? event.which : event.charCode));
+	if (keycode === 13) {
+	    event.preventDefault();
+	    if ($("#submitJoin").hasClass("tweet-button-active")) {
+		submitJoinClass($("#joinCode").val());
+		stopJoinGroup();
+	    }
+	}
+    });
+    
+    /************************** Send Tweet ****************************************************************************88*******/
+	function submitTweet(text) {
+		//console.log('In tweetSubmit');
+            var uri = "{% url tweetSubmit %}";
+            var xhr = new XMLHttpRequest();
+            var fd = new FormData();
+            
+            xhr._object.open("POST", uri, true);
+            xhr._object.onreadystatechange = function() {
+                if (xhr._object.readyState == 4 && xhr._object.status == 200) {
+                    // Handle response.
+		    //console.log(xhr._object.responseText);
+                    var data = JSON.parse(xhr._object.responseText);
+		    if (data.success) {
+			success();
+			
+			html = '<li id="tweet'+ data.tweetID +'" class="tweetList panel" style="display:none;">'+
+				    '<div class="avatar-holder">'+
+					'<div id="profile-avatar" style="margin: 10px 0 0 20%;{% if userInfo.avatarBackColor %}background-color:{{ userInfo.avatarBackColor }};{% endif %}{% if userInfo.avatarTextColor %}color:{{ userInfo.avatarTextColor }};{% endif %}" class="img-rounded"><span style="margin-top: 10px;">{{ user.first_name|slice:"0:1" }}</span></div>'+
+				    '</div>'+
+				    '<div class="right-panel-content">'+
+					'<div class="twitter-handle">'+
+					    '<div class="name">{{ user.first_name|capfirst }} {{ user.last_name|capfirst }}</div>'+
+					    '<div class="twitterName" style="margin-left:5px;">{{ user.username }} just now</div>'+
+					'</div>'+
+					'<div id="tweet-deck'+ data.tweetID +'" class="tweet-deck">'+ data.tweetText +'</div>'+
+					'<div class="tweet-controls">'+
+					    {% if userInfo.teacher %}
+					    '<div id="tempTweetButton" class="tweetDelete-button report_deleteTweet" title="delete"></div>'+
+					    {% else %}
+					    '<div id="tempTweetButton" class="tweetReport-button report_deleteTweet" title="report this tweet"></div>'+
+					    {% endif %}
+					'</div>'+
+				    '</div>'+
+				'</li>'
+			
+			$("#allTweetsList").prepend(html);
+			$("#tempTweetButton").attr('data-options', '{"tweetID":"'+ data.tweetID +'"}')
+			colorHashtags("tweet-deck"+ data.tweetID);
+			colorAtSigns("tweet-deck"+ data.tweetID);
+			colorWebLinks("tweet-deck"+ data.tweetID);
+			$("#tweet"+ data.tweetID).fadeIn(600);
+			var tweet_count = $("#tweetCounter").html();
+			$("#tweetCounter").html(parseInt(tweet_count)+1);
+			
+		    }else{
+			alert(data.error);
+			error();
+		    }
+                }
+            };
+            fd.append('userInfo_id', {{ userInfo.id }});
+            fd.append('text', text);
+	    {% if currentClass %}fd.append('classroomID', {{ currentClass.id }});{% endif %}
+            // Initiate a multipart/form-data upload
+            xhr._object.send(fd);
+	    //console.log( xhr._object);
+        }
+	
+    
+    /************************** Send createClass *****************************************************************************/
+	function submitNewClass(className) {
+		//console.log('In submitNewClass');
+            var uri = "{% url submitNewClass %}";
+            var xhr = new XMLHttpRequest();
+            var fd = new FormData();
+            
+            xhr._object.open("POST", uri, true);
+            xhr._object.onreadystatechange = function() {
+                if (xhr._object.readyState == 4 && xhr._object.status == 200) {
+                    // Handle response.
+		    //console.log(xhr._object.responseText);
+                    var data = JSON.parse(xhr._object.responseText);
+		    if (data.error) {
+			alert(data.error);
+			error();
+		    }else{
+                    $("#no-classes").remove();
+		    var htmlUpdate = '<div id="startClass'+ data.classID +'" class="startClass">'+
+			    '<div id="class'+ data.classID +'" class="myClass img-rounded" style="display:inline-block;margin-right:4px;">'+ data.className +'</div>'+
+			    '<div id="newClassCodeDisplay" class="displayClassCode img-rounded" style="margin-right:4px;">class code</div>'+
+			    '<div id="join'+ data.classID +'" class="joinAllowed" title="SHUT THE FRONT DOOR! No one else can join this class."></div>'+
+			    '<div id="newIconX" class="icon-X" style="float: right;margin: 7px 10px 0 0%;"></div>'+
+			    '</div>';
+                    $("#classes-holder").append(htmlUpdate);
+                    $("#class"+data.classID).attr('data-options','{"classID":"'+ data.classID +'"}');
+		    $("#newClassCodeDisplay").attr('data-options','{"classCode":"'+ data.code +'","classID":"'+ data.classID +'"}');
+		    $("#join"+ data.classID).attr('data-options','{"classID":"'+ data.classID +'"}');
+		    $("#newIconX").attr('data-options','{"classID":"'+ data.classID +'"}');
+		    success();
+		    
+		    startNewClassCode(data.code, data.classID);
+		    }
+                }
+            };
+            fd.append('userInfo_id', {{ userInfo.id }});
+            fd.append('className', className);
+            // Initiate a multipart/form-data upload
+            xhr._object.send(fd);
+	    //console.log( xhr._object);
+        }
+	
+    
+    /************************** Send joinClass *************************************************************************8*****/
+	function submitJoinClass(joinCode) {
+		//console.log('In submitJoinClass');
+            var uri = "{% url submitJoinClass %}";
+            var xhr = new XMLHttpRequest();
+            var fd = new FormData();
+            
+            xhr._object.open("POST", uri, true);
+            xhr._object.onreadystatechange = function() {
+                if (xhr._object.readyState == 4 && xhr._object.status == 200) {
+                    // Handle response.
+		    //console.log(xhr._object.responseText);
+                    var data = JSON.parse(xhr._object.responseText);
+		    if (data.error) {
+			alert(data.error);
+			error();
+		    }else{
+		    window.location.assign("/dashboard/"+data.classID);
+		    }
+                }
+            };
+            fd.append('userInfo_id', {{ userInfo.id }});
+            fd.append('joinCode', joinCode);
+            // Initiate a multipart/form-data upload
+            xhr._object.send(fd);
+	    //console.log( xhr._object);
+        }
+        
+    function startNewClassCode(code, classID) {
+        $("#code_display2").html(code);
+	$("#startTweetingToClass").attr('data-options','{"classID":"'+ classID +'"}');
+        $("#startNewClassPopup").fadeIn(600);
+        $("#shade").fadeIn(600);
+	$(".button").addClass("tweet-button-active");
+	$(".button").removeClass('tweet-button');
+	
+    }
+    
+    /************************** Send Toggle ClassLock *************************************************************************8*****/
+	function submitToggleClassLock(classID){
+		//console.log('In submitToggleClassLock');
+            var uri = "{% url submitClassLock %}";
+            var xhr = new XMLHttpRequest();
+            var fd = new FormData();
+            
+            xhr._object.open("POST", uri, true);
+            xhr._object.onreadystatechange = function() {
+                if (xhr._object.readyState == 4 && xhr._object.status == 200) {
+                    // Handle response.
+		    //console.log(xhr._object.responseText);
+                    var data = JSON.parse(xhr._object.responseText);
+		    if (data.toggle == true) {
+			$("#join"+ data.classID).removeClass("joinNotAllowed");
+			$("#join"+ data.classID).addClass("joinAllowed");
+			//document.getElementById('join'+ data.classID).tooltipText = 'OPEN THIS CLASS FOR BUSINESS! Anyone can join.';
+			$("#join"+ data.classID).data("ui-tooltip-title", "SHUT THE FRONT DOOR OF THIS CLASS! No one else can join.");
+			//console.log($("#join"+ data.classID).prop("title"));
+			
+		    }else{
+			$("#join"+ data.classID).removeClass("joinAllowed");
+			$("#join"+ data.classID).addClass("joinNotAllowed");
+			//document.getElementById('join'+ data.classID).tooltipText = 'SHUT THE FRONT DOOR OF THIS CLASS! No one else can join.';
+			$("#join"+ data.classID).data("ui-tooltip-title", "OPEN THIS CLASS FOR BUSINESS! Anyone can join.");
+			//console.log($("#join"+ data.classID).prop("title"));
+		    }
+                }
+            };
+            fd.append('userInfo_id', {{ userInfo.id }});
+            fd.append('classID', classID);
+            // Initiate a multipart/form-data upload
+            xhr._object.send(fd);
+	    //console.log( xhr._object);
+        }
+        
+	
+	
+    /************************** Send Delete Class *************************************************************************8*****/
+	function submitDeleteClass(classID){
+		//console.log('In submitDeleteClass');
+            var uri = "{% url submitDeleteClass %}";
+            var xhr = new XMLHttpRequest();
+            var fd = new FormData();
+            
+            xhr._object.open("POST", uri, true);
+            xhr._object.onreadystatechange = function() {
+                if (xhr._object.readyState == 4 && xhr._object.status == 200) {
+                    // Handle response.
+		    //console.log(xhr._object.responseText);
+                    var data = JSON.parse(xhr._object.responseText);
+		    $("#startClass"+data.classID).fadeOut(600, function(){$("#startClass"+data.classID).remove();});
+		    success();
+		    
+		    
+                }
+            };
+            fd.append('userInfo_id', {{ userInfo.id }});
+            fd.append('classID', classID);
+            // Initiate a multipart/form-data upload
+            xhr._object.send(fd);
+	    //console.log( xhr._object);
+        }
+	
+	
+    /************************** Send Drop Class *************************************************************************8*****/
+	function submitDropClass(classID){
+		//console.log('In submitDropClass');
+            var uri = "{% url submitDropClass %}";
+            var xhr = new XMLHttpRequest();
+            var fd = new FormData();
+            
+            xhr._object.open("POST", uri, true);
+            xhr._object.onreadystatechange = function() {
+                if (xhr._object.readyState == 4 && xhr._object.status == 200) {
+                    // Handle response.
+		    //console.log(xhr._object.responseText);
+                    var data = JSON.parse(xhr._object.responseText);
+		    $("#startClass"+data.classID).fadeOut(600, function(){$("#startClass"+data.classID).remove();});
+		    success();
+		    
+		    
+		    
+                }
+            };
+            fd.append('userInfo_id', {{ userInfo.id }});
+            fd.append('classID', classID);
+            // Initiate a multipart/form-data upload
+            xhr._object.send(fd);
+	    //console.log( xhr._object);
+        }
+	
+	
+    /************************** Send Delete Tweet *************************************************************************8*****/
+	function submitDeleteTweet(tweetID, send_Review_Or_Delete){
+		//console.log('In submitDeleteTweet');
+            var uri = "{% url submitDeleteTweet %}";
+            var xhr = new XMLHttpRequest();
+            var fd = new FormData();
+            
+            xhr._object.open("POST", uri, true);
+            xhr._object.onreadystatechange = function() {
+                if (xhr._object.readyState == 4 && xhr._object.status == 200) {
+                    // Handle response.
+		    //console.log(xhr._object.responseText);
+                    var data = JSON.parse(xhr._object.responseText);
+		    if (data.success) {
+			if (data.alert_or_delete == 'delete') {
+			    $("#tweet"+data.tweetID).fadeOut(600, function(){$("#tweet"+data.tweetID).remove();});
+			    var tweet_count = $("#tweetCounter").html();
+			    $("#tweetCounter").html(parseInt(tweet_count)-1);
+			    
+			    
+			}else{alert('Your teacher has been notified.');}
+			
+			
+			
+			
+			success();
+		    }else{alert(data.error);error();}
+		    
+		    
+		    
+		    
+                }
+            };
+            fd.append('userInfo_id', {{ userInfo.id }});
+	    {% if currentClass %}fd.append('classID', {{ currentClass.id }});{% endif %}
+            fd.append('tweetID', tweetID);
+            fd.append('alert_or_delete', send_Review_Or_Delete);
+            // Initiate a multipart/form-data upload
+            xhr._object.send(fd);
+	    //console.log( xhr._object);
+        }
+	
+	
+    /************************** Get Old Tweets *************************************************************************8*****/
+	function getNextTweets(pageType, tweetID){
+		//console.log('In getNextTweets');
+	    
+            var uri = "{% url getNextTweets %}";
+            var xhr = new XMLHttpRequest();
+            var fd = new FormData();
+            
+            xhr._object.open("POST", uri, true);
+            xhr._object.onreadystatechange = function() {
+                if (xhr._object.readyState == 4 && xhr._object.status == 200) {
+                    // Handle response.
+		    //console.log(xhr._object.responseText);
+		    var data = JSON.parse(xhr._object.responseText)
+		    //console.log(data);
+		    if (data.error) {alert(data.error);error();}
+		    else{
+			//console.log("data length"+data.length);
+			if (data.length<2) {
+			    noMoreTweets = 'True';
+			    //console.log("noMoreTweets in return: "+noMoreTweets);
+			}
+			lastTweetItem = parseInt(data[(data.length-1)].tweetID);
+			//console.log(data);
+			if (data.length>1) {
+			    for (var i=1; i < data.length; i++){
+				var tweetID = data[i].tweetID; //tweetID
+				var text = data[i].text; //text
+				var timeDelta = timeSince(data[i].timeDate); //dateTime
+				var firstName = data[i].user.first_name; //first name
+				var firstInitial = capitaliseFirstLetter(firstName[0]);
+				
+				if (data[i].user.teacher) {
+				    if (data[i].user.mr_ms) {
+					firstName = capitaliseFirstLetter(data[i].user.mr_ms);
+				    }else{firstName = capitaliseFirstLetter(firstName);}
+				}else{firstName = capitaliseFirstLetter(firstName);}
+				
+				var lastName = data[i].user.last_name; //last name
+				lastName = capitaliseFirstLetter(lastName);
+				var userName = data[i].user.username; //username
+				
+				
+				html = '<li id="tweet'+ tweetID +'" class="tweetList panel" style="display:none;">'+
+					    '<div class="avatar-holder">'+
+						'<div id="profile-avatar'+ i +'" style="margin: 10px 0 0 20%;" class="img-rounded profile-avatar"><span style="margin-top: 10px;">'+ firstInitial +'</span></div>'+
+					    '</div>'+
+					    '<div class="right-panel-content" style="margin-left:4px;">'+
+						'<div class="twitter-handle">'+
+						    '<div class="name">'+ firstName +' '+ lastName +'</div>'+
+						    '<div class="twitterName" style="margin-left:5px;">'+ userName +' '+ timeDelta +'</div>'+
+						'</div>'+
+						'<div id="tweet-deck'+ tweetID +'" class="tweet-deck">'+ text +'</div>'+
+						'<div class="tweet-controls">'+
+						    {% if userInfo.teacher %}
+						    '<div id="tempTweetButton'+ i +'" class="tweetDelete-button report_deleteTweet" title="delete"></div>'+
+						    {% else %}
+						    '<div id="tempTweetButton'+ i +'" class="tweetReport-button report_deleteTweet" title="report this tweet"></div>'+
+						    {% endif %}
+						'</div>'+
+					    '</div>'+
+					'</li>'
+					
+				$("#allTweetsList").append(html);
+				
+				if (data[i].user.avatarBackColor) {
+				    $("#profile-avatar"+i).css({'background-color':data[i].user.avatarBackColor});
+				}
+				if (data[i].user.avatarTextColor) {
+				    $("#profile-avatar"+i).css({'color':data[i].user.avatarTextColor});
+				}
+				
+				$("#tempTweetButton"+i).attr('data-options', '{"tweetID":"'+ tweetID +'"}');
+				colorHashtags("tweet-deck"+ tweetID);
+				colorAtSigns("tweet-deck"+ tweetID);
+				colorWebLinks("tweet-deck"+ tweetID);
+				$("#tweet"+ tweetID).fadeIn(2600);
+				scrollRunning = 'False';
+			    }
+			}
+		    }
+		    
+		    
+                }
+            };
+            fd.append('userInfo_id', {{ userInfo.id }});
+	    {% if currentClass %}fd.append('classID', {{ currentClass.id }});{% endif %}
+	    {% if hashSearch %}fd.append('hashID', {{ hashSearch.id }});{% endif %}
+            fd.append('pageType', pageType);
+            fd.append('tweetID', tweetID);
+            // Initiate a multipart/form-data upload
+            xhr._object.send(fd);
+	    //console.log( xhr._object);
+        }
+	
+	
+	
+    /************************** Get New Tweets *************************************************************************8*****/
+	function getNewTweets(pageType, tweetID){
+		//console.log('In getNewTweets');
+	    
+            var uri = "{% url getNewTweets %}";
+            var xhr = new XMLHttpRequest();
+            var fd = new FormData();
+            
+            xhr._object.open("POST", uri, true);
+            xhr._object.onreadystatechange = function() {
+                if (xhr._object.readyState == 4 && xhr._object.status == 200) {
+                    // Handle response.
+		    //console.log(xhr._object.responseText);
+		    var data = JSON.parse(xhr._object.responseText)
+		    //console.log(data);
+		    if (data.error) {alert(data.error);error();}
+		    else{
+			//console.log("data length"+data.length);
+			if (data.length<2) {
+			    noMoreTweets = 'True';
+			    //console.log("noMoreTweets in return: "+noMoreTweets);
+			}
+			firstTweetItem = parseInt(data[(data.length-1)].tweetID);
+			//console.log(data);
+			if (data.length>1) {
+			    startOver = 1;
+			    for (var i=1; i < data.length; i++){
+				var tweetID = data[i].tweetID; //tweetID
+				var text = data[i].text; //text
+				var timeDelta = timeSince(data[i].timeDate); //dateTime
+				var firstName = data[i].user.first_name; //first name
+				var firstInitial = capitaliseFirstLetter(firstName[0]);
+				//console.log(data[i].user.teacher);
+				//console.log(data[i].user.mr_ms);
+				//console.log(data[i].user.avatarBackColor);
+				//console.log(data[i].user.avatarTextColor);
+				if (data[i].user.teacher) {
+				    if (data[i].user.mr_ms) {
+					firstName = capitaliseFirstLetter(data[i].user.mr_ms);
+				    }else{firstName = capitaliseFirstLetter(firstName);}
+				}else{firstName = capitaliseFirstLetter(firstName);}
+				
+				var lastName = data[i].user.last_name; //last name
+				lastName = capitaliseFirstLetter(lastName);
+				var userName = data[i].user.username; //username
+				
+			    if (parseInt(data[i].user.tweetUserID) == parseInt({{ user.id }})) {
+				//code pass do nothing
+			    }else{
+				html = '<li id="tweet'+ tweetID +'" class="tweetList panel" style="display:none;">'+
+					    '<div class="avatar-holder">'+
+						'<div id="profile-avatar'+ i +'" style="margin: 10px 0 0 20%;" class="profile-avatar img-rounded"><span style="margin-top: 10px;">'+ firstInitial +'</span></div>'+
+					    '</div>'+
+					    '<div class="right-panel-content" style="margin-left:4px;">'+
+						'<div class="twitter-handle">'+
+						    '<div class="name">'+ firstName +' '+ lastName +'</div>'+
+						    '<div class="twitterName" style="margin-left:5px;">'+ userName +' '+ timeDelta +'</div>'+
+						'</div>'+
+						'<div id="tweet-deck'+ tweetID +'" class="tweet-deck">'+ text +'</div>'+
+						'<div class="tweet-controls">'+
+						    {% if userInfo.teacher %}
+						    '<div id="tempTweetButton'+ i +'" class="tweetDelete-button report_deleteTweet" title="delete"></div>'+
+						    {% else %}
+						    '<div id="tempTweetButton'+ i +'" class="tweetReport-button report_deleteTweet" title="report this tweet"></div>'+
+						    {% endif %}
+						'</div>'+
+					    '</div>'+
+					'</li>'
+					
+				$("#allTweetsList").prepend(html);
+				
+				if (data[i].user.avatarBackColor) {
+				    $("#profile-avatar"+i).css({'background-color':data[i].user.avatarBackColor});
+				}
+				if (data[i].user.avatarTextColor) {
+				    $("#profile-avatar"+i).css({'color':data[i].user.avatarTextColor});
+				}
+				
+				$("#tempTweetButton"+i).attr('data-options', '{"tweetID":"'+ tweetID +'"}');
+				colorHashtags("tweet-deck"+ tweetID);
+				colorAtSigns("tweet-deck"+ tweetID);
+				colorWebLinks("tweet-deck"+ tweetID);
+				$("#tweet"+ tweetID).fadeIn(2600);
+				scrollRunning = 'False';
+			    }
+			    }
+			}
+		    }
+		    
+		    
+                }
+            };
+            fd.append('userInfo_id', {{ userInfo.id }});
+	    {% if currentClass %}fd.append('classID', {{ currentClass.id }});{% endif %}
+	    {% if hashSearch %}fd.append('hashID', {{ hashSearch.id }});{% endif %}
+            fd.append('pageType', pageType);
+            fd.append('tweetID', tweetID);
+            // Initiate a multipart/form-data upload
+            xhr._object.send(fd);
+	    //console.log( xhr._object);
+        }
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+    /************************** Send Profile Settings  *************************************************************************8*****/
+	function sendProfileColors(profileBack,profileColor,avatarBack,avatarColor,mr_ms){
+		//console.log('In sendProfileColors');
+	    
+            var uri = "{% url sendProfileColors %}";
+            var xhr = new XMLHttpRequest();
+            var fd = new FormData();
+            
+            xhr._object.open("POST", uri, true);
+            xhr._object.onreadystatechange = function() {
+                if (xhr._object.readyState == 4 && xhr._object.status == 200) {
+                    // Handle response.
+		    //console.log(xhr._object.responseText);
+		    var data = JSON.parse(xhr._object.responseText)
+		    //console.log(data);
+		    if (data.error) {alert(data.error);error();}
+		    else{}
+                }
+            };
+            fd.append('userInfo_id', {{ userInfo.id }});
+            fd.append('profileBack', profileBack);
+            fd.append('profileColor', profileColor);
+            fd.append('avatarBack', avatarBack);
+            fd.append('avatarColor', avatarColor);
+            fd.append('mr_ms', mr_ms);
+	    
+            // Initiate a multipart/form-data upload
+            xhr._object.send(fd);
+	    //console.log( xhr._object);
+        }
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	//------------------------------------------------Functions-------------------------------------------------------------
+	
+	
+	function capitaliseFirstLetter(string){
+	    return string.charAt(0).toUpperCase() + string.slice(1);
+	}
+	
+	
+	function timeSince(ts){
+	    now = new Date();
+	    ts = new Date(ts);
+	    var delta = now.getTime() - ts.getTime();
+	
+	    delta = delta/1000; //us to s
+	
+	    var ps, pm, ph, pd, min, hou, sec, days;
+	
+	    if(delta<=59){
+		ps = (delta>1) ? "s": "";
+		return parseInt(delta)+" second"+ps
+	    }
+	
+	    if(delta>=60 && delta<=3599){
+		min = Math.floor(delta/60);
+		sec = delta-(min*60);
+		pm = (min>1) ? "s": "";
+		ps = (sec>1) ? "s": "";
+		return min+" minute"+pm;
+	    }
+	
+	    if(delta>=3600 && delta<=86399){
+		hou = Math.floor(delta/3600);
+		min = Math.floor((delta-(hou*3600))/60);
+		ph = (hou>1) ? "s": "";
+		pm = (min>1) ? "s": "";
+		return hou+" hour"+ph+", "+min+" minute"+pm;
+	    } 
+	
+	    if(delta>=86400){
+		days = Math.floor(delta/86400);
+		hou =  Math.floor((delta-(days*86400))/60/60);
+		pd = (days>1) ? "s": "";
+		ph = (hou>1) ? "s": "";
+		return days+" day"+pd+", "+hou+" hour"+ph;
+	    }
+	
+	}
+	
+	
+	
+	
+	
+	
+	
+// Color pickers in different flavors.
+// -----------------------------------
+
+var backPicker = ColorPicker(document.getElementById('backPicker-popup'), updateBackPickerInputs);
+var textPicker = ColorPicker(document.getElementById('textPicker-popup'), updateTextPickerInputs);
+var avatarBack = ColorPicker(document.getElementById('avatarBack-popup'), updateAvatarBackInputs);
+var avatarText = ColorPicker(document.getElementById('avatarText-popup'), updateAvatarTextInputs);
+
+// Inputs.
+// -------
+
+function updateBackPickerInputs(hex) {
+    $("#profile-header-popup").css({'background':'url({{ MEDIA_URL }}/static/images/bg-tissue.png),-webkit-gradient(radial, 50% 50%, 0, 50% 50%, 287, color-stop(0%, '+ hex +'), color-stop(100%, #000))'});
+}
+function updateTextPickerInputs(hex) {
+    $("#profile-header-popup").css({'color':hex});
+}
+function updateAvatarBackInputs(hex) {
+    $("#avatar-back-color").css({'background-color':hex});
+}
+function updateAvatarTextInputs(hex) {
+    $("#avatar-back-color").css({'color':hex});
+}
+
+
+//Initial Colors when picker pops up
+function updateBackPicker() {
+    var initial = $("#profile-header").css('background');
+    var re = /from\(rgb\((\d*), (\d*), (\d*)/; 
+    var matchText = initial.match(re);
+    var rgb = {'r':matchText[1],'g':matchText[2],'b':matchText[3]};
+    var hex = ColorPicker.rgb2hex(rgb);
+    backPicker.setHex(hex);
+}
+
+function updateTextPicker() {
+    var initial = $("#profile-header").css('color');
+    var re = /rgb\((\d*), (\d*), (\d*)/; 
+    var matchText = initial.match(re);
+    var rgb = {'r':matchText[1],'g':matchText[2],'b':matchText[3]};
+    var hex = ColorPicker.rgb2hex(rgb);
+    textPicker.setHex(hex);
+}
+
+function updateAvatarBack() {
+    var initial = $("#profile-avatar").css('background-color');
+    var re = /rgb\((\d*), (\d*), (\d*)/; 
+    var matchText = initial.match(re);
+    var rgb = {'r':matchText[1],'g':matchText[2],'b':matchText[3]};
+    var hex = ColorPicker.rgb2hex(rgb);
+    avatarBack.setHex(hex);
+}
+function updateAvatarText() {
+    var initial = $("#profile-avatar").css('color');
+    var re = /rgb\((\d*), (\d*), (\d*)/; 
+    var matchText = initial.match(re);
+    var rgb = {'r':matchText[1],'g':matchText[2],'b':matchText[3]};
+    var hex = ColorPicker.rgb2hex(rgb);
+    avatarText.setHex(hex);
+}
+
+
+//updateBackPicker(initialBackPicker);
+	
+	
+	
+	
+    
+});
+</script>

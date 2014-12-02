@@ -1,0 +1,150 @@
+{% extends "base.html" %}
+
+
+{% block title %}{{ user.first_name|capfirst }}'s Tweets{% endblock %}
+
+
+
+
+{% block NavIcons %}
+        <a href="/dashboard/" id="classes-button" class="navButton" title="my classes">
+            <div class="icon-classes"></div>
+            <div style="margin: 10px 0 0 0px;">Classes</div>
+            
+        </a>
+        <a href="/myTweets/" id="myProfile-button" class="navButton" title="my tweets">
+            <div class="icon-me"></div>
+            <div style="margin: 10px 0 0 0px;">Me</div>
+        </a>
+{% endblock %}
+    
+	
+{% block body %}
+<section id="wrapper">
+    <div id="left-side">
+	
+	
+        <!---------------------- Profile --------------------------------------------------------------------------->
+        <div id="profile-load" class="panel img-rounded">
+            <div id="profile-header" class="panel-header img-top-rounded">
+                <div id="profile-avatar" class="img-rounded"><span style="margin-top: 10px;">{{ user.first_name|slice:"0:1" }}</span></div>
+                <div id="userName">{{ user.first_name|capfirst }} {{ user.last_name|capfirst }}</div>
+                <div id="userHandle">{{ user.username }}</div>
+                <div id="edit-profile" title="edit your profile"></div>
+            </div>
+            <div id="profile-content" class="panel-content img-bottom-rounded">
+                <a href="/myTweets/">
+                    <div id="tweetCounter-holder">
+                        <div id="tweetTitle">Tweets</div>
+                        <div id="tweetCounter">{{ tweetCount }}</div>
+                    </div>
+                </a>
+                <div id="tweetButton" class="img-rounded" title="tweet">
+                    <div class="icon-tweet" title="tweet"></div>
+                </div>
+            </div>
+        </div>
+	
+	
+	
+        <!---------------------- Class List ------------------------------------------------------------------------------->
+        <div id="classList" class="panel img-rounded">
+            <div class="panel-header  img-top-rounded">
+                My Classes
+            </div>
+            <div id="classes-holder" class="panel-content">
+                {% if allClasses %}
+                    {% for class in allClasses %}
+		<div id="startClass{{ class.id }}" class="startClass">
+		    <div id="class{{ class.id }}" class="myClass img-rounded {% ifequal class.id currentClass.id %}myActiveClass{% endifequal %}" data-options='{"classID":"{{ class.id }}"}' style="display: inline-block;">{{ class.name|capfirst }}</div>
+		    
+		    {% ifequal class.classOwnerID userInfo.id %}
+			<div class="displayClassCode img-rounded" data-options='{"classCode":"{{ class.code }}","classID":"{{ class.id }}"}'>class code</div>
+			
+			{% if class.allowJoin %}
+			<div id="join{{ class.id }}" class="joinAllowed" data-options='{"classID":"{{ class.id }}"}' title="SHUT THE FRONT DOOR OF THIS CLASS! No one else can join."></div>
+			{% else %}
+			<div id="join{{ class.id }}" class="joinNotAllowed" data-options='{"classID":"{{ class.id }}"}' title="OPEN THIS CLASS FOR BUSINESS! Anyone can join."></div>
+			{% endif %}
+			
+			<div class="icon-X" style="float: right;margin: 7px 10px 0 0%;" data-options='{"classID":"{{ class.id }}"}' ></div>
+		    {% else %}
+			<div class="dropClass img-rounded" data-options='{"classID":"{{ class.id }}"}' >drop class</div>
+		    {% endifequal %}
+		</div>
+		    {% endfor %}
+		    {% else %}
+		    <div id="no-classes" style="text-align: center;">You don't have any classes.</div>
+		    {% endif %}
+	    </div>
+            <div id="bottom-content" class="panel-content img-bottom-rounded" style="height: 30px;">
+		{% if userInfo.teacher %}
+                <div id="createGroup">create a class</div>
+		{% endif %}
+                <div id="joinGroup">join a class</div>
+            </div>
+        </div>
+	
+	
+	
+    </div>
+    
+    
+    
+    
+    
+    <!--------------------------------- Right Side Tweet Holder -------------------------------------------------------------->
+    
+    
+    
+    
+    
+    
+    <div id="right-side" class="img-rounded">
+        <div id="rightTitle">
+            <div id="tweetLeftTitle">Tweets</div>
+            {% if hashSearch %}
+            <div id="tweetCenterTitle">#{{ hashSearch.tag }}</div>
+            {% else %}
+            <div id="tweetCenterTitle">There are no hashtag's with that name.</div>
+            {% endif %}
+        </div>
+        
+        <div id="newTweets" style="display: none;">6 new Tweets</div>
+        
+	<ul id="allTweetsList">
+	    {% if tweets %}
+		{% for tweet in tweets %}
+	    <!---------------------- Tweet Holder ----------------------------------------------------------------------------->
+	    <li id="tweet{{ tweet.id }}" class="tweetList panel">
+		{% for tweetUserInfo in tweet.userinfo_set.all %}
+		<div class="avatar-holder">
+		    <div id="profile-avatar" style="margin: 10px 0 0 20%;{% if tweetUserInfo.avatarBackColor %}background-color:{{ tweetUserInfo.avatarBackColor }};{% endif %}{% if tweetUserInfo.avatarTextColor %}color:{{ tweetUserInfo.avatarTextColor }};{% endif %}" class="img-rounded"><span style="margin-top: 10px;">{{ tweetUserInfo.user.first_name|slice:"0:1" }}</span></div>
+		</div>
+		<div class="right-panel-content">
+		    <div class="twitter-handle">
+			<div class="name">{% if tweetUserInfo.teacher %}{% if tweetUserInfo.mr_ms %}{{ tweetUserInfo.mr_ms }}{% else %}{{ tweetUserInfo.user.first_name }}{% endif %}{% else %}{{ tweetUserInfo.user.first_name }}{% endif %} {{ tweetUserInfo.user.last_name }}</div>
+			<div class="twitterName">{{ tweetUserInfo.user.username }} {{ tweet.timeDate|timesince }} class: {% for class in tweet.classroom_set.all %}{{ class.name }}{% endfor %}</div>
+			{% endfor %}
+		    </div>
+		    <div id="tweet-deck{{ tweet.id }}" class="tweet-deck">{{ tweet.text|capfirst }}</div>
+		    <div class="tweet-controls">
+			{% if userInfo.teacher %}
+			<div class="tweetDelete-button report_deleteTweet" data-options='{"tweetID":"{{ tweet.id }}"}' title="delete"></div>
+			{% else %}
+			<div class="tweetReport-button report_deleteTweet" data-options='{"tweetID":"{{ tweet.id }}"}' title="report this tweet"></div>
+			{% endif %}
+		    </div>
+		</div>
+	    </li>
+		{% endfor %}
+	    {% endif %}
+	</ul>
+    </div>
+</section>
+{% endblock %}
+
+{% include "includes/dashboard_script.html" %}
+
+</body>
+</html>

@@ -1,0 +1,157 @@
+
+<!----------------Hidden Popup for tweets-------------------->
+<div id="shade" style=""></div>
+<div id="popup" class="popup img-rounded">
+    <div class="popTitleimg-top-rounded">
+        <div id="compose-tweet"class="title-bar">Compose new Tweet</div>
+        <div class="title-bar icon" style="margin:10px 10px 0 0;float: right;">
+            <div id="x-popup" class="icon-X" title="close"></div>
+        </div>
+    </div>
+    {% if currentClass %}
+    <div id="text-holder">
+        <textarea id="tweetText" class="img-small-rounded" autofocus maxlength="140" contenteditable="true" spellcheck="true" cols=50 rows=5></textarea>
+    </div>
+    <div id="number-counter">140</div>
+    <div id="tweetSubmit" class="tweet-button img-rounded">
+        <div class="icon-tweet"></div>
+        <div style="margin: 8px 0 0 3px;font-size: 16px;font-weight: bold;">Tweet</div>
+    </div>
+    {% else %}
+    <div id="text-holder">
+        <textarea readonly class="img-small-rounded" autofocus maxlength="140" contenteditable="true" spellcheck="true" cols=50 rows=5>Please join a class to start tweeting.</textarea>
+    </div>
+    {% endif %}
+</div>
+
+
+<!-------------------------------------- Create Group Popup ---------------------------------->
+<div id="createClassPopup" class="popup img-rounded" style="height: 100px;width: 450px">
+    <div class="popTitle img-top-rounded">
+        <div id="compose-tweet"class="title-bar" style="margin-left: 160px;">Create a Class</div>
+        <div class="title-bar icon" style="margin:10px 10px 0 0;float: right;">
+            <div id="x-create" class="icon-X" title="close"></div>
+        </div>
+    </div>
+    <div id="text-holder" style="font-size: 16px; line-height: 30px;float: left;margin: 10px 0 0 10px;">
+	Class Name: 
+        <input id="className" autofocus="autofocus" style="font-size: 16px; line-height: 20px;padding: 5px;" type="text" class="img-small-rounded" name="className" maxlength="45">
+    </div>
+    <div id="submitClass" class="button tweet-button img-rounded" style="float: right;margin: 5px 10px 0 0;">
+        <div style="margin: 8px 0 0 25px;font-size: 16px;font-weight: bold;">Send</div>
+    </div>
+</div>
+
+
+<!-------------------------------------- Join Group Popup ---------------------------------->
+<div id="joinClassPopup" class="popup img-rounded" style="height: 100px;width: 450px">
+    <div class="popTitle img-top-rounded">
+        <div id="compose-tweet"class="title-bar" style="margin-left: 160px;">Join a Class</div>
+        <div class="title-bar icon" style="margin:10px 10px 0 0;float: right;">
+            <div id="x-join" class="icon-X" title="close"></div>
+        </div>
+    </div>
+    <div id="text-holder" style="font-size: 16px; line-height: 30px;float: left;margin: 10px 0 0 10px;">
+	Class Code: 
+        <input id="joinCode" autofocus="autofocus" style="font-size: 16px; line-height: 20px;padding: 5px;" type="text" class="img-small-rounded" name="joinCode" maxlength="5">
+    </div>
+    <div id="submitJoin" class="button tweet-button img-rounded" style="float: right;margin: 5px 10px 0 0;">
+        <div style="margin: 8px 0 0 30px;font-size: 16px;font-weight: bold;">Join</div>
+    </div>
+</div>
+
+
+<!-------------------------------------- Start a New Class Popup ---------------------------------->
+<div id="startNewClassPopup" class="popup img-rounded" style="height: 280px;width: 550px;top: 33%;left: 28%;">
+    <div class="popTitle img-top-rounded">
+        <div id="compose-tweet"class="title-bar" style="margin-left: 220px;">Class Join Code</div>
+        <div class="title-bar icon" style="margin:10px 10px 0 0;float: right;">
+            <div id="X-Code" class="icon-X" title="close"></div>
+        </div>
+    </div>
+    <div id="text-holder" style="font-weight: bold;color: #0084B4;font-size: 140px; line-height: 140px;margin: 10px 0 0 100px;">
+        <div id="code_display2"></div>
+    </div>
+    <div id="back_button" class="button tweet-button-active img-rounded" style="float: left;margin: 15px 0px 0 155px;height: 50px;">
+        <div style="margin: 17px 0 0 28px;font-size: 16px;font-weight: bold;text-align: center;">Back</div>
+    </div>
+    <div id="startTweetingToClass" class="button tweet-button-active img-rounded" style="float: left;margin: 15px 0px 0 30px;height: 50px;">
+        <div style="margin: 8px 0 0 00px;font-size: 16px;font-weight: bold;text-align: center;">Start Tweeting</div>
+    </div>
+</div>
+
+
+
+<!-------------------------------------- Check if sure Popup ---------------------------------->
+<div id="areYouSurePopup" class="popup img-rounded" style="height: 180px;width: 550px;top: 33%;left: 28%;">
+    <div class="popTitle img-top-rounded">
+        <div id="compose-tweet"class="title-bar" style="margin-left: 260px;">Alert</div>
+        <div class="title-bar icon" style="margin:10px 10px 0 0;float: right;">
+            <div id="X-Sure" class="icon-X" title="close"></div>
+        </div>
+    </div>
+    <div id="text-holder-sure" style="font-size: 16px;text-align: center;margin: 15px 0 10px; 0px;"></div>
+    
+    <div id="yes-button" class="tweet-button-active img-rounded" style="float: left;margin: 15px 0px 0 155px;height: 50px;">
+        <div style="margin: 17px 0 0 33px;font-size: 16px;font-weight: bold;text-align: center;">Yes</div>
+    </div>
+    <div id="no-button" class="tweet-button-active img-rounded" style="float: left;margin: 15px 0px 0 30px;height: 50px;">
+        <div style="margin: 17px 0 0 35px;font-size: 16px;font-weight: bold;text-align: center;">No</div>
+    </div>
+</div>
+
+
+
+<!-------------------------------------- Edit Profile Popup ---------------------------------->
+<div id="editProfilePopup" class="popup img-rounded" style="height: 280px;width: 550px;top: 33%;left: 28%;">
+    <div id="profile-header-popup"class="profile-header panel-header img-top-rounded">
+        <div class="title-bar icon" style="margin:0px 0px 0 0;float: right;">
+            <div id="X-editProfile" class="icon-X" title="close"></div>
+        </div>
+        <div id="color-avatar-text" style="display: inline-block;" class="color-button img-rounded" title="avatar text color"></div>
+        <div id="avatar-back-color" style="display: inline-block;vertical-align: middle;" class="profile-avatar img-rounded"><span style="margin-top: 10px;">{{ user.first_name|slice:"0:1" }}</span></div>
+        <div id="color-avatar-back" style="display: inline-block;" class="color-button img-rounded" title="avatar background color"></div>
+        <div id="" class="userName">
+	{% if userInfo.teacher %}
+	    <select id="mr_ms">
+		<option value="{{ user.first_name|capfirst }}">{{ user.first_name|capfirst }}</option>
+		<option value="Mr">Mr</option>
+		<option value="Ms">Ms</option>
+	    </select>
+	{% else %}
+	    {{ user.first_name|capfirst }}
+	{% endif %}
+	     {{ user.last_name|capfirst }}
+	</div>
+        <div id="" class="userHandle">{{ user.username }}</div>
+        <div id="color-back" class="color-button img-rounded" title="background color"></div>
+        <div id="color-text" class="color-button img-rounded" title="text color"></div>
+    </div>
+    
+    <div id="cancel-button" class="tweet-button-active img-rounded" style="float: left;margin: 15px 0px 0 110px;height: 50px;">
+        <div style="margin: 17px 0 0 21px;font-size: 16px;font-weight: bold;text-align: center;">Cancel</div>
+    </div>
+    <div id="save-button" class="tweet-button-active img-rounded" style="float: left;margin: 15px 0px 0 30px;height: 50px;">
+        <div style="margin: 17px 0 0 28px;font-size: 16px;font-weight: bold;text-align: center;">Save</div>
+    </div>
+</div>
+<div id="backPicker-popup" class="myColorPickers cp-small popup img-right-rounded" style=""></div>
+<div id="textPicker-popup" class="myColorPickers cp-small popup img-right-rounded" style=""></div>
+<div id="avatarBack-popup" class="myColorPickers cp-small popup img-right-rounded" style=""></div>
+<div id="avatarText-popup" class="myColorPickers cp-small popup img-right-rounded" style=""></div>
+
+
+
+<!-------------------------------------- Success ---------------------------------->
+<div id="success" class="success-error">
+    <div>Success</div>
+</div>
+
+
+<!-------------------------------------- Success ---------------------------------->
+<div id="error" class="success-error">
+    <div>Error</div>
+</div>
+
+
+<!----------------------------------- End of Popups ------------------------------------------>

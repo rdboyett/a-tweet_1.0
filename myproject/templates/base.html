@@ -1,0 +1,58 @@
+{% load dajaxice_templatetags %}
+
+<!DOCTYPE html>
+
+<html>
+<head>
+    <title>{% block title %}No Title{% endblock %}</title>
+    
+    <script language="JavaScript" type="text/javascript" src="http://ajax.googleapis.com/ajax/libs/jquery/1.9.1/jquery.min.js"></script>
+    <script language="JavaScript" type="text/javascript" src="http://code.jquery.com/ui/1.10.0/jquery-ui.js"></script>
+    
+    <script type="text/javascript" src="{{ MEDIA_URL }}/static/js/colorpicker.js"></script>
+    
+    <link href="{{ MEDIA_URL }}/static/css/jquery-ui-1.10.3.custom.css" rel="stylesheet">
+
+    
+    <link rel="stylesheet" href="{{ MEDIA_URL }}/static/css/style.css" />
+
+	{% dajaxice_js_import %}
+    
+    <script>
+        $(function() {
+		$( document ).tooltip();
+        });
+    </script>
+    
+</head>
+
+<body>
+    
+{% include "includes/popups.html" %}
+
+
+
+<div id="header">
+    <div id="navIcons">
+	{% block NavIcons %}{% endblock %}
+    </div>
+    <div id="center-logo" class="icon-bird"></div>
+    
+    <form action="/search/" method="get">
+	    <input class="search-bar" id="n" type="text" name="q" placeholder="Search...">
+	    <button type="submit" value="Search" class="search_button"></button>
+    </form>
+	  
+    <div id="right-tweet-button" class="icon-button img-rounded" title="tweet">
+        <div class="icon-tweet" title="tweet"></div>
+    </div>
+</div>
+
+
+
+{% block body %}{% endblock %}
+
+{% include "includes/dashboard_script.html" %}
+<!--<script type="text/javascript" src="{{ MEDIA_URL }}/static/js/myColorPicker.js"></script>-->
+</body>
+</html>

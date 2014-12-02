@@ -1,0 +1,67 @@
+
+
+
+<!DOCTYPE html>
+
+<html>
+<head>
+    <title>500 Error</title>
+    
+    <script language="JavaScript" type="text/javascript" src="http://ajax.googleapis.com/ajax/libs/jquery/1.9.1/jquery.min.js"></script>
+    <script language="JavaScript" type="text/javascript" src="http://code.jquery.com/ui/1.10.0/jquery-ui.js"></script>
+    
+    <script type="text/javascript" src="{{ MEDIA_URL }}/static/js/colorpicker.js"></script>
+    
+    <link href="{{ MEDIA_URL }}/static/css/jquery-ui-1.10.3.custom.css" rel="stylesheet">
+
+    
+    <link rel="stylesheet" href="{{ MEDIA_URL }}/static/css/style.css" />
+
+</head>
+
+<body>
+    
+<div id="header">
+    <div id="navIcons">
+        <div id="classes-button" class="navButton" title="my classes" style="cursor: default;">
+            <div class="icon-classes"></div>
+            <div style="margin: 10px 0 0 0px;">Classes</div>
+            
+        </div>
+        <a href="/myTweets/" id="myProfile-button" class="navButton" title="my tweets">
+            <div class="icon-me"></div>
+            <div style="margin: 10px 0 0 0px;">Me</div>
+        </a>
+    </div>
+    <div id="center-logo" class="icon-bird"></div>
+    
+    <form action="/search/" method="get">
+	    <input class="search-bar" id="n" type="text" name="q" placeholder="Search...">
+	    <button type="submit" value="Search" class="search_button"></button>
+    </form>
+	  
+    <div id="right-tweet-button" class="icon-button img-rounded" title="tweet">
+        <div class="icon-tweet" title="tweet"></div>
+    </div>
+</div>
+
+<section id="wrapper">
+	<div style="background-color:#FFF;margin: 20px auto;width:90%;height:90%;padding:20px; font-size:20px;line-height:22px;" class="img-rounded">
+		Looks like our server might have a cold or just doesn't want to work today.  We are sorry for any inconvenience this
+		may cause you.
+
+		<p>Please feel free to email the guy who causes all these problems for us at rboyett@alvaradoisd.net.<p>
+	</div>
+</section>
+
+
+
+</body>
+</html>
+
+
+
+
+
+
+

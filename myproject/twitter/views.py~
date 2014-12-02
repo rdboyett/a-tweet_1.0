@@ -1,0 +1,1014 @@
+import os
+ROOT_PATH = os.path.dirname(__file__)
+
+import json
+import logging
+import httplib2
+import re
+from datetime import date
+
+from django.shortcuts import render_to_response, redirect, get_object_or_404
+from django.http import Http404, HttpResponse, HttpResponseRedirect, HttpResponseBadRequest
+from myproject.twitter.models import *
+from django.core.exceptions import ObjectDoesNotExist
+#from myproject.twitter.forms import *
+from django.utils import simplejson
+from django.contrib.auth.models import *
+from django.contrib.auth import logout, login
+from django.contrib.auth.decorators import login_required
+
+from apiclient.discovery import build
+from django.core.urlresolvers import reverse
+from myproject import settings
+from oauth2client import xsrfutil
+from oauth2client.client import flow_from_clientsecrets
+from oauth2client.django_orm import Storage
+
+from apiclient.http import MediaFileUpload
+from oauth2client.client import OAuth2WebServerFlow
+
+from apiclient import errors
+
+
+from django.core.mail import send_mail
+
+from django.core import serializers
+
+#Test where the settings file is located (in home computer or on the server)
+testPath = ROOT_PATH.split(os.sep)
+if 'C:' in testPath:
+    bOnServer = False
+else:
+    bOnServer = True
+
+
+# CLIENT_SECRETS, name of a file containing the OAuth 2.0 information for this
+# application, including client_id and client_secret, which are found
+# on the API Access tab on the Google APIs
+# Console <http://code.google.com/apis/console>
+CLIENT_SECRETS = os.path.join(ROOT_PATH,'client_secrets.json')
+
+SCOPES = [
+    'https://www.googleapis.com/auth/userinfo.email',
+    'https://www.googleapis.com/auth/userinfo.profile',
+    # Add other requested scopes.
+]
+
+if bOnServer:
+    FLOW = flow_from_clientsecrets(
+        CLIENT_SECRETS,
+        scope= ' '.join(SCOPES),
+        redirect_uri='http://a-tweet.alvaradoisd.net:8080/oauth2callback')
+else:
+    FLOW = flow_from_clientsecrets(
+        CLIENT_SECRETS,
+        scope= ' '.join(SCOPES),
+        redirect_uri='http://127.0.0.1:8000/oauth2callback')
+
+
+
+def test(request):
+    return HttpResponse("Hello, You're in!")
+
+
+
+def index(request):
+    
+    credential = None
+    
+    if credential is None or credential.invalid == True:
+        FLOW.params['access_type'] = 'offline'
+        FLOW.params['state'] = xsrfutil.generate_token(settings.SECRET_KEY,
+                                                       request.user)
+        authorize_url = FLOW.step1_get_authorize_url()
+        return HttpResponseRedirect(authorize_url)
+
+def auth_return(request):
+    
+    if not xsrfutil.validate_token(settings.SECRET_KEY, request.REQUEST['state'],
+                                   request.user):
+      return  HttpResponseBadRequest()
+    credential = FLOW.step2_exchange(request.REQUEST)
+    
+    user_info = get_user_info(credential)
+    google_email = user_info.get('email')
+    firstName = user_info.get('given_name')
+    lastName = user_info.get('family_name')
+    
+    emailEnding = google_email.split("@")[1]
+    userName = "@"+google_email.split("@")[0]
+    
+    if User.objects.filter(username=userName):
+        # Make sure that the e-mail is unique.
+        user = User.objects.get(username=userName)
+        #userInfo = UserInfo.objects.get(user=user)
+    else:
+        if 'alvaradoisd.net' in emailEnding:
+            if 'student' in emailEnding:
+                bTeacher = False
+            else:
+                bTeacher = True
+            
+            user = User.objects.create(
+                username = userName,
+                first_name = firstName,
+                last_name = lastName,
+                email = google_email,
+                password = 'password',
+            )
+            
+            userInfo = UserInfo.objects.create(
+                user = user,
+                teacher = bTeacher,
+                readOnly = False,
+            )
+        else:
+            return HttpResponse('Please sign in with your Alvarado ISD account.')
+    
+    
+    if user:
+        user.backend = 'django.contrib.auth.backends.ModelBackend'
+        login(request, user)
+        
+    if UserInfo.objects.filter(user=user):
+        userInfo = UserInfo.objects.get(user=user)
+    else:
+        userInfo = UserInfo.objects.create(
+            user = user,
+            teacher = bTeacher,
+            readOnly = False,
+        )
+    
+    storage = Storage(CredentialsModel, 'id', user, 'credential')
+    storage.put(credential)
+    return HttpResponseRedirect('/dashboard/')
+
+
+
+def get_user_info(credentials):
+  """Send a request to the UserInfo API to retrieve the user's information.
+
+  Args:
+    credentials: oauth2client.client.OAuth2Credentials instance to authorize the
+                 request.
+  Returns:
+    User information as a dict.
+  """
+  user_info_service = build(
+      serviceName='oauth2', version='v2',
+      http=credentials.authorize(httplib2.Http()))
+  user_info = None
+  try:
+    user_info = user_info_service.userinfo().get().execute()
+  except errors.HttpError, e:
+    logging.error('An error occurred: %s', e)
+  if user_info and user_info.get('id'):
+    return user_info
+  else:
+    raise NoUserIdException()
+
+
+
+@login_required
+def dashboard(request, classID=False):
+    if UserInfo.objects.filter(user=request.user):
+        userInfo = UserInfo.objects.get(user=request.user)
+    else:
+        return redirect('/a-tweet/')
+    
+    #Get total number of tweets made by user.
+    if userInfo.tweets.all():
+        tweetCount = userInfo.tweets.all().count()
+    else:
+        tweetCount = 0;
+        
+    #Get all users classes
+    if userInfo.classrooms.all():
+        allClasses = userInfo.classrooms.all()
+    else:
+        allClasses = False
+        
+    
+    #Get Trending for the class
+    if classID:
+        if HashTag.objects.filter(classroomID=classID):
+            trendings = HashTag.objects.filter(classroomID=classID).order_by('-timeDate')[:20]
+        else:
+            trendings = False
+    elif allClasses:
+        if HashTag.objects.filter(classroomID=allClasses[0].id):
+            trendings = HashTag.objects.filter(classroomID=allClasses[0].id).order_by('-timeDate')[:20]
+        else:
+            trendings = False
+    else:
+        trendings = False
+        
+    
+    #Get Current Class
+    if classID:
+        if Classroom.objects.filter(id=classID):
+            currentClass = Classroom.objects.get(id=classID)
+        else:
+            currentClass = False
+    elif allClasses:
+        currentClass = allClasses[0]
+    else:
+        currentClass = False
+        
+    
+    #Get Tweets
+    if currentClass:
+        if currentClass.tweets.all():
+            tweets = currentClass.tweets.all().order_by('-timeDate')[0:20]
+        else:
+            tweets = False
+    else:
+        tweets = False
+    
+    return render_to_response('index.html', {
+            'user':request.user,
+            'userInfo':userInfo,
+            'tweetCount':tweetCount,
+            'allClasses':allClasses,
+            'trendings':trendings,
+            'currentClass':currentClass,
+            'tweets':tweets,
+        })
+
+
+@login_required
+def myTweets(request):
+    if UserInfo.objects.filter(user=request.user):
+        userInfo = UserInfo.objects.get(user=request.user)
+    else:
+        return redirect('/a-tweet/')
+    
+    #Get total number of tweets made by user.
+    if userInfo.tweets.all():
+        tweetCount = userInfo.tweets.all().count()
+        myTweets = userInfo.tweets.all().order_by('-timeDate')[0:20]
+    else:
+        myTweets = False
+        tweetCount = 0;
+        
+    #Get all users classes
+    if userInfo.classrooms.all():
+        allClasses = userInfo.classrooms.all()
+    else:
+        allClasses = False
+        
+    
+    
+    return render_to_response('my_tweets.html', {
+            'user':request.user,
+            'userInfo':userInfo,
+            'tweetCount':tweetCount,
+            'allClasses':allClasses,
+            'tweets':myTweets,
+        })
+
+
+
+@login_required
+def search(request, hashTag=False):
+    if request.GET.get('q'):
+        hashTag = request.GET['q']
+    else:
+        return redirect('/a-tweet/')
+    
+    #strip any spaces and hash marks
+    try:
+        if len(hashTag) > 2:
+            hashTag = hashTag.strip()
+            if hashTag[0] == "#":
+                hashTag = hashTag[1:]
+        else:
+            hashTag = False
+    except:
+        hashTag = False
+        
+    
+    if HashTag.objects.filter(tag=hashTag):
+        hashSearch = HashTag.objects.get(tag=hashTag)
+    else:
+        hashSearch = False
+        
+    if UserInfo.objects.filter(user=request.user):
+        userInfo = UserInfo.objects.get(user=request.user)
+    else:
+        return redirect('/a-tweet/')
+    
+    #Get total number of tweets with tag.
+    if hashSearch:
+        if hashSearch.tweets.all():
+            tweetCount = hashSearch.tweets.all().count()
+            hashTweets = hashSearch.tweets.all().order_by('-timeDate')[0:20]
+        else:
+            hashTweets = False
+            tweetCount = 0;
+    else:
+        hashTweets = False
+        tweetCount = 0;
+        
+    #Get all users classes
+    if userInfo.classrooms.all():
+        allClasses = userInfo.classrooms.all()
+    else:
+        allClasses = False
+        
+    
+    
+    return render_to_response('search.html', {
+            'user':request.user,
+            'userInfo':userInfo,
+            'tweetCount':tweetCount,
+            'allClasses':allClasses,
+            'tweets':hashTweets,
+            'hashSearch':hashSearch,
+        })
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+
+################################## Ajax Calls ###################################################
+
+@login_required
+def tweetSubmit(request):
+    if request.method == 'POST':
+        userInfo_id = request.POST["userInfo_id"]
+        tweetText = request.POST["text"]
+        classroomID = request.POST["classroomID"]
+        
+        userInfo = UserInfo.objects.get(id=userInfo_id)
+        currentClass = Classroom.objects.get(id=classroomID)
+        
+        #Scrub hashtags out
+        reg = re.compile(r'(?:^|\s)[#?](\S*)')
+        hashTagList = re.findall(reg, tweetText)
+        
+        #Save the Tweet
+        newTweet = Tweet.objects.create(
+            text = tweetText,
+        )
+        
+        currentClass.tweets.add(newTweet)
+        userInfo.tweets.add(newTweet)
+        
+        #Save the hashtag individually and point it back to the tweets its found in.
+        if hashTagList:
+            for tag in hashTagList:
+                if HashTag.objects.filter(tag=tag):
+                    newHashTag = HashTag.objects.get(tag=tag)
+                else:
+                    newHashTag = HashTag.objects.create(
+                        tag = tag,
+                        classroomID = classroomID,
+                    )
+                    
+                newHashTag.tweets.add(newTweet)
+        
+        data = {
+            'success': 'True',
+            'tweetID': newTweet.id,
+            'tweetText': tweetText,
+        }
+    
+    else:
+        data = {'error':'Did not post correctly',}
+            
+    return HttpResponse(json.dumps(data))
+
+
+
+
+@login_required
+def submitNewClass(request):
+    if request.method == 'POST':
+        userInfo_id = request.POST["userInfo_id"]
+        className = request.POST["className"]
+        className = className.strip()
+        newCode = generateCode()
+        
+        newClass = Classroom.objects.create(
+            name = className,
+            code = newCode,
+            allowJoin = True,
+            classOwnerID = userInfo_id,
+        )
+        
+        if UserInfo.objects.filter(id=userInfo_id):
+            userInfo = UserInfo.objects.get(id=userInfo_id)
+            userInfo.classrooms.add(newClass)
+            
+            data = {
+                'classID':newClass.id,
+                'className': className,
+                'code': newCode,
+            }
+            
+        else:
+            data = {'error':'No UserInfo',}
+        
+    
+    else:
+        data = {'error':'Did not post correctly',}
+        
+    return HttpResponse(json.dumps(data))
+
+
+
+
+@login_required
+def submitJoinClass(request):
+    if request.method == 'POST':
+        userInfo_id = request.POST["userInfo_id"]
+        joinCode = request.POST["joinCode"]
+        
+        userInfo = UserInfo.objects.get(id=userInfo_id)
+                
+        #Get all users classes
+        if userInfo.classrooms.all():
+            allClasses = userInfo.classrooms.all()
+        else:
+            allClasses = False
+        
+        #get the the class with that joinCode
+        if Classroom.objects.filter(code=joinCode):
+            newClass = Classroom.objects.get(code=joinCode)
+            
+                
+            if allClasses and newClass in allClasses:
+                data = {'error': "Sorry, you already have this class.",}
+            else:
+                #check to see if you are allowed to join
+                if newClass.allowJoin:
+                    userInfo.classrooms.add(newClass)
+                    data = {
+                        'classID': newClass.id,
+                        'className': newClass.name,
+                    }
+                else:
+                    data = {'error': "Sorry, this class is locked by the owner.",}
+            
+            
+            
+            
+        else:
+            data = {'error': "Sorry, there are no classes with that code.",}
+            
+            
+    else:
+        data = {
+            'error': "There was an error posting this request. Please try again.",
+        }
+        
+            
+    return HttpResponse(json.dumps(data))
+
+
+
+
+
+@login_required
+def submitClassLock(request):
+    if request.method == 'POST':
+        userInfo_id = request.POST["userInfo_id"]
+        classID = request.POST["classID"]
+        
+        if Classroom.objects.filter(id=classID):
+            classRoom = Classroom.objects.get(id=classID)
+            if classRoom.allowJoin:
+                classRoom.allowJoin = False
+            else:
+                classRoom.allowJoin = True
+                
+            classRoom.save()
+            data = {
+                'classID': classID,
+                'toggle': classRoom.allowJoin,
+            }
+        else:
+            data = {
+                'error': "There is no class with that ID",
+            }
+    else:
+        data = {
+            'error': "There was an error posting this request. Please try again.",
+        }
+            
+    return HttpResponse(json.dumps(data))
+
+
+
+@login_required
+def submitDeleteClass(request):
+    if request.method == 'POST':
+        userInfo_id = request.POST["userInfo_id"]
+        classID = request.POST["classID"]
+        
+        if Classroom.objects.filter(id=classID):
+            classRoom = Classroom.objects.get(id=classID)
+            
+            #delete all the hashtags associated with this classroom
+            if HashTag.objects.filter(classroomID=classID):
+                HashTag.objects.filter(classroomID=classID).delete()
+            
+            #delete all the tweets with this classroom
+            if classRoom.tweets.all():
+                classRoom.tweets.all().delete()
+                
+            #delete the classroom
+            classRoom.delete()
+            
+            data = {
+                'success': 'success',
+                'classID': classID,
+            }
+        else:
+            data = {
+                'error': "There is no class with that ID",
+            }
+    else:
+        data = {
+            'error': "There was an error posting this request. Please try again.",
+        }
+            
+    return HttpResponse(json.dumps(data))
+
+
+
+
+@login_required
+def submitDropClass(request):
+    if request.method == 'POST':
+        userInfo_id = request.POST["userInfo_id"]
+        classID = request.POST["classID"]
+        
+        userInfo = UserInfo.objects.get(id=userInfo_id)
+        
+        if Classroom.objects.filter(id=classID):
+            classRoom = Classroom.objects.get(id=classID)
+            
+            userInfo.classrooms.remove(classRoom)
+            
+            data = {
+                'classID': classID,
+            }
+        else:
+            data = {
+                'error': "There is no class with that ID",
+            }
+    else:
+        data = {
+            'error': "There was an error posting this request. Please try again.",
+        }
+            
+    return HttpResponse(json.dumps(data))
+
+
+
+
+@login_required
+def submitDeleteTweet(request):
+    if request.method == 'POST':
+        userInfo_id = request.POST["userInfo_id"]
+        try:
+            classID = request.POST["classID"]
+        except:
+            classID = False
+        tweetID = request.POST["tweetID"]
+        alert_or_delete = request.POST["alert_or_delete"]
+        
+        user = request.user
+        userInfo = UserInfo.objects.get(id=userInfo_id)
+        if classID:
+            classRoom = Classroom.objects.get(id=classID)
+            
+        
+        if Tweet.objects.filter(id=tweetID):
+            oldTweet = Tweet.objects.get(id=tweetID)
+            
+            if alert_or_delete == 'delete':
+                #delete any records for hashtags
+                if HashTag.objects.filter(tweets=oldTweet):
+                    hashTagList = HashTag.objects.filter(tweets=oldTweet)
+                    for hashTag in hashTagList:
+                        hashTag.tweets.remove(oldTweet)
+                        if hashTag.tweets.all().count() == 0:
+                            hashTag.delete()
+                        
+                    
+                userInfo.tweets.remove(oldTweet)
+                if classID:
+                    classRoom.tweets.remove(oldTweet)
+                else:
+                    for classRoom in oldTweet.classroom_set.all():
+                        classRoom.tweets.remove(oldTweet)
+                    
+                oldTweet.delete()
+                    
+                data = {
+                    'success': 'success',
+                    'tweetID': tweetID,
+                    'alert_or_delete':alert_or_delete,
+                }
+                
+            else:
+                if not classID:
+                    for classRoom in oldTweet.classroom_set.all():
+                        classRoom = classRoom
+                for classOwner in classRoom.userinfo_set.all():
+                    email = classOwner.user.email
+                    
+                    emailEnding = email.split("@")[1]
+                    if 'student' in emailEnding:
+                        pass
+                    else:
+                        bTeacher = True
+                        sendToEmail = email
+                        
+                for tweetSender in oldTweet.userinfo_set.all():
+                    send_mail(
+                        'Alert from Alvarado ISD Twitter',
+                        user.first_name+' '+user.last_name+' would like you to take a look at the following'+
+                        ' tweet in your twitter class: '+classRoom.name+'\n\n'+
+                        'The tweet was posted by: '+ tweetSender.user.first_name+' '+tweetSender.user.last_name+'\n'+
+                        'Date: '+oldTweet.timeDate.strftime("%A %B %d %Y at %I:%M %p")+'\n\n'+
+                        'The Tweet Text is: \n\n'+oldTweet.text+'\n\n'+
+                        'Please take care of this matter immeadiately.\n\n'+
+                        'If you feel this message reached you in error, please disregard or you can email rboyett@alvaradoisd.net for any questions.',
+                        'rboyett@alvaradoisd.net',
+                        [sendToEmail],
+                        fail_silently=False
+                    )
+                    data = {
+                        'success': 'success',
+                        'tweetID': tweetID,
+                        'alert_or_delete':alert_or_delete,
+                    }
+        
+        else:
+            data = {
+                'error': "That tweet does not exist in our database.",
+            }
+    else:
+        data = {
+            'error': "There was an error posting this request. Please try again.",
+        }
+        
+            
+    return HttpResponse(json.dumps(data))
+
+
+
+@login_required
+def getNextTweets(request):
+    if request.method == 'POST':
+        userInfo_id = request.POST["userInfo_id"]
+        
+        try:
+            classID = request.POST["classID"]
+        except:
+            classID = False
+        
+        try:
+            hashID = request.POST["hashID"]
+        except:
+            hashID = False
+        
+        pageType = request.POST["pageType"]
+        tweetID = request.POST["tweetID"]
+        
+        lastTweet = get_object_or_404(Tweet, id=tweetID)
+        
+        user = request.user
+        userInfo = UserInfo.objects.get(id=userInfo_id)
+        
+        dataList = []
+        if pageType == "dashboard" and classID:
+            if Tweet.objects.filter(classroom__id=classID, timeDate__lte=lastTweet.timeDate):
+                nextTweets = Tweet.objects.filter(classroom__id=classID, timeDate__lte=lastTweet.timeDate).order_by('-timeDate')[0:20]
+                for tweeter in nextTweets:
+                    for tweetUser in tweeter.userinfo_set.all():
+                        data = {
+                            'tweetID':tweeter.id,
+                            'timeDate': str(tweeter.timeDate),
+                            'text': tweeter.text,
+                            'user':{
+                                'first_name':tweetUser.user.first_name,
+                                'last_name':tweetUser.user.last_name,
+                                'username':tweetUser.user.username,
+                                'teacher':tweetUser.teacher,
+                                'mr_ms':tweetUser.mr_ms,
+                                'avatarBackColor':tweetUser.avatarBackColor,
+                                'avatarTextColor':tweetUser.avatarTextColor,
+                            }
+                        }
+                        dataList.append(data)
+            else:
+                data = {
+                    'error': "There are no more tweets.",
+                }
+                
+        elif pageType == "myTweets":
+            if Tweet.objects.filter(userinfo=userInfo, timeDate__lte=lastTweet.timeDate):
+                nextTweets = Tweet.objects.filter(userinfo=userInfo, timeDate__lte=lastTweet.timeDate).order_by('-timeDate')[0:20]
+                for tweeter in nextTweets:
+                    for tweetUser in tweeter.userinfo_set.all():
+                        data = {
+                            'tweetID':tweeter.id,
+                            'timeDate': str(tweeter.timeDate),
+                            'text': tweeter.text,
+                            'user':{
+                                'first_name':tweetUser.user.first_name,
+                                'last_name':tweetUser.user.last_name,
+                                'username':tweetUser.user.username,
+                                'teacher':tweetUser.teacher,
+                                'mr_ms':tweetUser.mr_ms,
+                                'avatarBackColor':tweetUser.avatarBackColor,
+                                'avatarTextColor':tweetUser.avatarTextColor,
+                            }
+                        }
+                        dataList.append(data)
+            else:
+                data = {
+                    'error': "There are no more tweets.",
+                }
+                
+        elif pageType == "search" and hashID:
+            if Tweet.objects.filter(hashtag__id=hashID, timeDate__lte=lastTweet.timeDate):
+                nextTweets = Tweet.objects.filter(hashtag__id=hashID, timeDate__lte=lastTweet.timeDate).order_by('-timeDate')[0:20]
+                for tweeter in nextTweets:
+                    for tweetUser in tweeter.userinfo_set.all():
+                        data = {
+                            'tweetID':tweeter.id,
+                            'timeDate': str(tweeter.timeDate),
+                            'text': tweeter.text,
+                            'user':{
+                                'first_name':tweetUser.user.first_name,
+                                'last_name':tweetUser.user.last_name,
+                                'username':tweetUser.user.username,
+                                'teacher':tweetUser.teacher,
+                                'mr_ms':tweetUser.mr_ms,
+                                'avatarBackColor':tweetUser.avatarBackColor,
+                                'avatarTextColor':tweetUser.avatarTextColor,
+                            }
+                        }
+                        dataList.append(data)
+            else:
+                data = {
+                    'error': "There are no more tweets.",
+                }
+        
+        else:
+            data = {
+                'error': "Database page type is incorrect.",
+            }
+    else:
+        data = {
+            'error': "There was an error posting this request. Please try again.",
+        }
+        
+            
+    return HttpResponse(json.dumps(dataList))
+
+
+
+@login_required
+def getNewTweets(request):
+    if request.method == 'POST':
+        userInfo_id = request.POST["userInfo_id"]
+        
+        try:
+            classID = request.POST["classID"]
+        except:
+            classID = False
+        
+        try:
+            hashID = request.POST["hashID"]
+        except:
+            hashID = False
+        
+        pageType = request.POST["pageType"]
+        tweetID = request.POST["tweetID"]
+        
+        firstTweet = get_object_or_404(Tweet, id=tweetID)
+        
+        user = request.user
+        userInfo = UserInfo.objects.get(id=userInfo_id)
+        
+        dataList = []
+        if pageType == "dashboard" and classID:
+            if Tweet.objects.filter(classroom__id=classID, timeDate__gte=firstTweet.timeDate):
+                nextTweets = Tweet.objects.filter(classroom__id=classID, timeDate__gte=firstTweet.timeDate).order_by('timeDate')[0:20]
+                for tweeter in nextTweets:
+                    for tweetUser in tweeter.userinfo_set.all():
+                        data = {
+                            'tweetID':tweeter.id,
+                            'timeDate': str(tweeter.timeDate),
+                            'text': tweeter.text,
+                            'user':{
+                                'tweetUserID':tweetUser.user.id,
+                                'first_name':tweetUser.user.first_name,
+                                'last_name':tweetUser.user.last_name,
+                                'username':tweetUser.user.username,
+                                'teacher':tweetUser.teacher,
+                                'mr_ms':tweetUser.mr_ms,
+                                'avatarBackColor':tweetUser.avatarBackColor,
+                                'avatarTextColor':tweetUser.avatarTextColor,
+                            }
+                        }
+                        dataList.append(data)
+            else:
+                data = {
+                    'error': "There are no more tweets.",
+                }
+                
+        elif pageType == "myTweets":
+            if Tweet.objects.filter(userinfo=userInfo, timeDate__gte=firstTweet.timeDate):
+                nextTweets = Tweet.objects.filter(userinfo=userInfo, timeDate__gte=firstTweet.timeDate).order_by('timeDate')[0:20]
+                for tweeter in nextTweets:
+                    for tweetUser in tweeter.userinfo_set.all():
+                        data = {
+                            'tweetID':tweeter.id,
+                            'timeDate': str(tweeter.timeDate),
+                            'text': tweeter.text,
+                            'user':{
+                                'tweetUserID':tweetUser.user.id,
+                                'first_name':tweetUser.user.first_name,
+                                'last_name':tweetUser.user.last_name,
+                                'username':tweetUser.user.username,
+                                'teacher':tweetUser.teacher,
+                                'mr_ms':tweetUser.mr_ms,
+                                'avatarBackColor':tweetUser.avatarBackColor,
+                                'avatarTextColor':tweetUser.avatarTextColor,
+                            }
+                        }
+                        dataList.append(data)
+            else:
+                data = {
+                    'error': "There are no more tweets.",
+                }
+                
+        elif pageType == "search" and hashID:
+            if Tweet.objects.filter(hashtag__id=hashID, timeDate__gte=firstTweet.timeDate):
+                nextTweets = Tweet.objects.filter(hashtag__id=hashID, timeDate__gte=firstTweet.timeDate).order_by('timeDate')[0:20]
+                for tweeter in nextTweets:
+                    for tweetUser in tweeter.userinfo_set.all():
+                        data = {
+                            'tweetID':tweeter.id,
+                            'timeDate': str(tweeter.timeDate),
+                            'text': tweeter.text,
+                            'user':{
+                                'tweetUserID':tweetUser.user.id,
+                                'first_name':tweetUser.user.first_name,
+                                'last_name':tweetUser.user.last_name,
+                                'username':tweetUser.user.username,
+                                'teacher':tweetUser.teacher,
+                                'mr_ms':tweetUser.mr_ms,
+                                'avatarBackColor':tweetUser.avatarBackColor,
+                                'avatarTextColor':tweetUser.avatarTextColor,
+                            }
+                        }
+                        dataList.append(data)
+            else:
+                data = {
+                    'error': "There are no more tweets.",
+                }
+        
+        else:
+            data = {
+                'error': "Database page type is incorrect.",
+            }
+    else:
+        data = {
+            'error': "There was an error posting this request. Please try again.",
+        }
+        
+            
+    return HttpResponse(json.dumps(dataList))
+
+
+
+
+
+def search_bar(request):
+    hashTag = request.GET.get('term') #jquery-ui.autocomplete parameter
+    
+    #strip any spaces and hash marks
+    hashTag = hashTag.strip()
+    if hashTag[0] == "#":
+        hashTag = hashTag[1:]
+        
+    res = []
+    idList = []
+    if HashTag.objects.filter(tag__istartswith=hashTag):
+        for tag in HashTag.objects.filter(tag__istartswith=hashTag):
+            dict = {'id':tag.id, 'label':'#'+tag.tag, 'value':'#'+tag.tag}
+            res.append(dict)
+            idList.append(tag.id)
+        
+    if HashTag.objects.filter(tag__icontains=hashTag):
+        for tag in HashTag.objects.filter(tag__icontains=hashTag):
+            #if tag.id not in idList:
+                dict = {'id':tag.id, 'label':'#'+tag.tag, 'value':'#'+tag.tag}
+                res.append(dict)
+        
+         
+    return HttpResponse(simplejson.dumps(res))
+
+
+def sendProfileColors(request):
+    if request.method == 'POST':
+        userInfo_id = request.POST["userInfo_id"]
+        profileBack = request.POST["profileBack"]
+        profileColor = request.POST["profileColor"]
+        avatarBack = request.POST["avatarBack"]
+        avatarColor = request.POST["avatarColor"]
+        mr_ms = request.POST["mr_ms"]
+        
+        userInfo = UserInfo.objects.get(id=userInfo_id)
+        userInfo.backColor = profileBack
+        userInfo.textColor = profileColor
+        userInfo.avatarBackColor = avatarBack
+        userInfo.avatarTextColor = avatarColor
+        userInfo.mr_ms = mr_ms
+        userInfo.save()
+        
+        data = {
+            'success': 'success',
+            'profileBack':userInfo.backColor,
+            'profileColor':userInfo.textColor,
+            'avatarBack':userInfo.avatarBackColor,
+            'avatarColor':userInfo.avatarTextColor,
+            'mr_ms':userInfo.mr_ms,
+        }
+    else:
+        data = {
+            'error': "There was an error posting this request. Please try again.",
+        }
+            
+    return HttpResponse(json.dumps(data))
+
+
+
+
+
+
+
+
+
+
+#---------------------------------- Special Functions ----------------------------------------
+
+
+import string
+from time import time
+from itertools import chain
+from random import seed, choice, sample
+
+
+def generateCode(length=5, digits=3, upper=0, lower=2):
+    seed(time())
+
+    lowercase = string.lowercase.translate(None, "o")
+    uppercase = string.uppercase.translate(None, "O")
+    letters = "{0:s}{1:s}".format(lowercase, uppercase)
+
+    password = list(
+        chain(
+            (choice(uppercase) for _ in range(upper)),
+            (choice(lowercase) for _ in range(lower)),
+            (choice(string.digits) for _ in range(digits)),
+            (choice(letters) for _ in range((length - digits - upper - lower)))
+        )
+    )
+
+    return "".join(sample(password, len(password)))
+
+
+
+
